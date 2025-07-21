@@ -1,0 +1,305 @@
+{
+  "cohort_summary": {
+    "total_patients": 1000,
+    "total_pathways": 1000,
+    "avg_pathway_length": 3.438
+  },
+  "pathways": {
+    "10003400": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Multiple Myeloma",
+        "timestamp": "2137-08-04 00:07:00",
+        "days_from_start": 0
+      }
+    ],
+    "10004990": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2132-11-06 18:00:00",
+        "days_from_start": 0
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2133-05-05 17:27:00",
+        "days_from_start": 179
+      }
+    ],
+    "10008754": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Non-Hodgkin Lymphoma",
+        "timestamp": "2146-02-21 17:13:00",
+        "days_from_start": 0
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Non-Hodgkin Lymphoma",
+        "timestamp": "2146-05-28 19:19:00",
+        "days_from_start": 96
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Non-Hodgkin Lymphoma",
+        "timestamp": "2146-06-20 12:18:00",
+        "days_from_start": 118
+      }
+    ],
+    "10010231": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2117-11-08 20:21:00",
+        "days_from_start": 0
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2117-12-18 09:37:00",
+        "days_from_start": 39
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2118-01-04 13:30:00",
+        "days_from_start": 56
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2118-01-15 16:02:00",
+        "days_from_start": 67
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2118-01-31 17:58:00",
+        "days_from_start": 83
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2118-02-21 13:30:00",
+        "days_from_start": 104
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2118-03-07 17:27:00",
+        "days_from_start": 118
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2118-04-02 11:54:00",
+        "days_from_start": 144
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2118-04-14 15:18:00",
+        "days_from_start": 156
+      }
+    ],
+    "10012768": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Multiple Myeloma",
+        "timestamp": "2111-08-13 06:17:00",
+        "days_from_start": 0
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Multiple Myeloma",
+        "timestamp": "2111-11-25 11:39:00",
+        "days_from_start": 104
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Multiple Myeloma",
+        "timestamp": "2112-01-06 15:01:00",
+        "days_from_start": 146
+      }
+    ],
+    "10014354": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2146-10-08 23:47:00",
+        "days_from_start": 0
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2146-11-09 01:53:00",
+        "days_from_start": 31
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2147-04-26 16:44:00",
+        "days_from_start": 199
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2147-06-04 00:42:00",
+        "days_from_start": 238
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2147-09-12 05:06:00",
+        "days_from_start": 338
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2147-11-14 22:12:00",
+        "days_from_start": 401
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2147-11-26 00:39:00",
+        "days_from_start": 413
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2148-05-10 23:29:00",
+        "days_from_start": 579
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2148-06-24 15:22:00",
+        "days_from_start": 624
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2148-06-30 01:09:00",
+        "days_from_start": 630
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2148-07-18 02:31:00",
+        "days_from_start": 648
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2148-08-14 22:57:00",
+        "days_from_start": 675
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2148-08-22 15:18:00",
+        "days_from_start": 683
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2149-03-04 23:14:00",
+        "days_from_start": 877
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2149-06-19 22:54:00",
+        "days_from_start": 984
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2149-09-17 22:54:00",
+        "days_from_start": 1074
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2150-02-04 20:12:00",
+        "days_from_start": 1214
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2150-04-10 02:40:00",
+        "days_from_start": 1279
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2150-04-30 20:19:00",
+        "days_from_start": 1299
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2150-05-09 16:09:00",
+        "days_from_start": 1308
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2151-11-14 11:32:00",
+        "days_from_start": 1862
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2153-01-15 06:43:00",
+        "days_from_start": 2290
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2153-03-19 06:32:00",
+        "days_from_start": 2353
+      }
+    ],
+    "10015272": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Multiple Myeloma",
+        "timestamp": "2137-06-12 18:36:00",
+        "days_from_start": 0
+      }
+    ],
+    "10017644": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Leukemia",
+        "timestamp": "2118-02-02 17:56:00",
+        "days_from_start": 0
+      }
+    ],
+    "10019003": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Other Hematologic",
+        "timestamp": "2153-04-12 19:07:00",
+        "days_from_start": 0
+      }
+    ],
+    "10019517": [
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Non-Hodgkin Lymphoma",
+        "timestamp": "2165-05-28 21:46:00",
+        "days_from_start": 0
+      },
+      {
+        "event_type": "diagnosis",
+        "event_subtype": "Non-Hodgkin Lymphoma",
+        "timestamp": "2166-04-10 14:29:00",
+        "days_from_start": 316
+      }
+    ]
+  }
+}

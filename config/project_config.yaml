@@ -1,0 +1,26 @@
+# Your GCP project configuration
+billing_project: "mimic-oncology-pathways"  # Your project ID
+
+# MIMIC-IV dataset configuration (updated names)
+mimic_datasets:
+  hospital: "physionet-data.mimiciv_3_1_hosp"
+  icu: "physionet-data.mimiciv_3_1_icu"
+  derived: "physionet-data.mimiciv_3_1_derived"
+
+# Core tables for oncology analysis
+tables:
+  patients: "patients"
+  admissions: "admissions"
+  diagnoses_icd: "diagnoses_icd"
+  procedures_icd: "procedures_icd"
+  d_icd_diagnoses: "d_icd_diagnoses"
+
+# ICD-10 codes for hematologic malignancies
+oncology_codes:
+  - "C81%"  # Hodgkin lymphoma
+  - "C82%"  # Follicular lymphoma  
+  - "C83%"  # Non-follicular lymphoma
+  - "C90%"  # Multiple myeloma
+  - "C91%"  # Lymphoid leukemia
+  - "C92%"  # Myeloid leukemia
+  - "C95%"  # Other leukemias
