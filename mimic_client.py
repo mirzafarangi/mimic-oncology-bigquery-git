@@ -45,34 +45,18 @@ class MIMICClient:
             logger.info(f"Testing connection to project: {self.project_id}")
             logger.info(f"Testing access to dataset: {self.mimic_dataset}")
             
-            # Test basic BigQuery access with correct column names
-            query = f"""
-            SELECT table_id, row_count
-            FROM `{self.mimic_dataset}.__TABLES__`
-            WHERE table_id = 'patients'
-            LIMIT 1
-            """
-            
+            # Test direct table access (most reliable)
             logger.info("Executing test query...")
-            result = self.client.query(query).to_dataframe()
+            simple_query = f"SELECT COUNT(*) as count FROM `{self.mimic_dataset}.patients` LIMIT 1"
+            result = self.client.query(simple_query).to_dataframe()
             
             if len(result) > 0:
-                row_count = result['row_count'].iloc[0] if 'row_count' in result.columns else 'Unknown'
-                logger.info(f"✅ Connection successful. MIMIC-IV patients table has {row_count} rows")
+                count = result['count'].iloc[0]
+                logger.info(f"✅ Connection successful. Found {count:,} patients")
                 return True
             else:
-                # Try simpler test if metadata query fails
-                logger.info("Trying direct table access...")
-                simple_query = f"SELECT COUNT(*) as count FROM `{self.mimic_dataset}.patients` LIMIT 1"
-                result = self.client.query(simple_query).to_dataframe()
-                
-                if len(result) > 0:
-                    count = result['count'].iloc[0]
-                    logger.info(f"✅ Connection successful. Found {count:,} patients")
-                    return True
-                else:
-                    logger.error("❌ No results from test query - check dataset access")
-                    return False
+                logger.error("❌ No results from test query - check dataset access")
+                return False
                 
         except Exception as e:
             logger.error(f"❌ Connection test failed: {str(e)}")
@@ -96,11 +80,11 @@ class MIMICClient:
         try:
             query = f"""
             SELECT 
-                table_name,
-                APPROX_COUNT_DISTINCT(*) as row_count
-            FROM `{self.mimic_dataset}.INFORMATION_SCHEMA.TABLES`
+                table_id as table_name,
+                row_count
+            FROM `{self.mimic_dataset}.__TABLES__`
             WHERE table_type = 'BASE_TABLE'
-            ORDER BY table_name
+            ORDER BY table_id
             """
             return self.client.query(query).to_dataframe()
         except Exception as e:
@@ -116,7 +100,7 @@ def test_connection(project_id: str = None) -> bool:
         logger.error(f"Connection test failed: {str(e)}")
         return False
 
-# ICD Code Mappings for Oncology
+# ICD Code Mappings for Oncology (Updated and Comprehensive)
 CANCER_ICD_MAPPINGS = {
     # Hematologic Malignancies
     'hodgkin_lymphoma': {
@@ -154,29 +138,11 @@ CANCER_ICD_MAPPINGS = {
     },
     
     # Thyroid Cancers
-    'papillary_thyroid': {
+    'thyroid_cancer': {
         'icd10': ['C73'],
         'icd9': ['193'],
         'category': 'Thyroid',
-        'name': 'Papillary Thyroid Carcinoma'
-    },
-    'follicular_thyroid': {
-        'icd10': ['C73'],
-        'icd9': ['193'],
-        'category': 'Thyroid',
-        'name': 'Follicular Thyroid Carcinoma'
-    },
-    'medullary_thyroid': {
-        'icd10': ['C73'],
-        'icd9': ['193'],
-        'category': 'Thyroid',
-        'name': 'Medullary Thyroid Carcinoma'
-    },
-    'anaplastic_thyroid': {
-        'icd10': ['C73'],
-        'icd9': ['193'],
-        'category': 'Thyroid',
-        'name': 'Anaplastic Thyroid Carcinoma'
+        'name': 'Thyroid Cancer'
     },
     
     # Gastrointestinal Cancers
@@ -214,17 +180,11 @@ CANCER_ICD_MAPPINGS = {
     },
     
     # Lung Cancers
-    'lung_adenocarcinoma': {
+    'lung_cancer': {
         'icd10': ['C34.0', 'C34.1', 'C34.2', 'C34.3', 'C34.8', 'C34.9'],
         'icd9': ['162.0', '162.1', '162.2', '162.3', '162.4', '162.5', '162.8', '162.9'],
         'category': 'Thoracic',
-        'name': 'Lung Adenocarcinoma'
-    },
-    'lung_squamous_cell': {
-        'icd10': ['C34.0', 'C34.1', 'C34.2', 'C34.3', 'C34.8', 'C34.9'],
-        'icd9': ['162.0', '162.1', '162.2', '162.3', '162.4', '162.5', '162.8', '162.9'],
-        'category': 'Thoracic',
-        'name': 'Lung Squamous Cell Carcinoma'
+        'name': 'Lung Cancer'
     },
     
     # Genitourinary Cancers
@@ -267,12 +227,20 @@ CANCER_ICD_MAPPINGS = {
         'name': 'Cervical Cancer'
     },
     
+    # Breast Cancer
+    'breast_cancer': {
+        'icd10': ['C50.0', 'C50.1', 'C50.2', 'C50.3', 'C50.4', 'C50.5', 'C50.6', 'C50.8', 'C50.9'],
+        'icd9': ['174.0', '174.1', '174.2', '174.3', '174.4', '174.5', '174.6', '174.8', '174.9', '175.0', '175.9'],
+        'category': 'Breast',
+        'name': 'Breast Cancer'
+    },
+    
     # Brain Tumors
-    'glioblastoma': {
+    'brain_cancer': {
         'icd10': ['C71.0', 'C71.1', 'C71.2', 'C71.3', 'C71.4', 'C71.5', 'C71.6', 'C71.7', 'C71.8', 'C71.9'],
         'icd9': ['191.0', '191.1', '191.2', '191.3', '191.4', '191.5', '191.6', '191.7', '191.8', '191.9'],
         'category': 'Central Nervous System',
-        'name': 'Glioblastoma'
+        'name': 'Brain Cancer'
     },
     
     # Dermatologic
@@ -281,6 +249,14 @@ CANCER_ICD_MAPPINGS = {
         'icd9': ['172.0', '172.1', '172.2', '172.3', '172.4', '172.5', '172.6', '172.7', '172.8', '172.9'],
         'category': 'Dermatologic',
         'name': 'Melanoma'
+    },
+    
+    # General cancer codes
+    'malignant_neoplasm': {
+        'icd10': ['C78.1', 'C80.1'],  # Secondary malignant neoplasm and malignant neoplasm unspecified
+        'icd9': ['196.0', '196.1', '196.2', '196.3', '196.5', '196.6', '196.8', '196.9', '199.0', '199.1'],
+        'category': 'Other',
+        'name': 'Malignant Neoplasm'
     }
 }
 

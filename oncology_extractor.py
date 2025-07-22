@@ -17,7 +17,7 @@ class MIMICOncologyExtractor:
         """Initialize the extractor with MIMIC client."""
         self.client = MIMICClient(project_id)
         
-    def extract_oncology_cohort(self, limit: int = 1000) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def extract_oncology_cohort(self, limit: int = 100) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Extract oncology patients and their clinical pathways from MIMIC-IV."""
         
         logger.info(f"🎯 Extracting oncology cohort (limit: {limit})...")
@@ -48,7 +48,7 @@ class MIMICOncologyExtractor:
             cancer_codes.extend(cancer_data['icd10'])
             cancer_codes.extend(cancer_data['icd9'])
         
-        cancer_codes_str = "', '".join(cancer_codes)
+        cancer_codes_str = "', '".join(cancer_codes[:50])  # Limit codes to avoid query size issues
         
         query = f"""
         WITH oncology_diagnoses AS (
@@ -110,10 +110,11 @@ class MIMICOncologyExtractor:
             df['cancer_type'] = df['icd_code'].apply(map_icd_to_cancer_type)
             df['cancer_category'] = df['cancer_type'].apply(get_cancer_category)
             
-            # Filter out unmapped codes
-            df = df[df['cancer_type'].notna()].copy()
+            # Filter out unmapped codes and assign default cancer type
+            df.loc[df['cancer_type'].isna(), 'cancer_type'] = 'Unspecified Cancer'
+            df.loc[df['cancer_category'].isna(), 'cancer_category'] = 'Other'
             
-            # Add staging (simplified for demo - in reality would need more complex logic)
+            # Add staging (simplified for demo)
             df['stage'] = self._assign_staging(df)
             
             # Format subject IDs
@@ -138,7 +139,7 @@ class MIMICOncologyExtractor:
             
             if cancer_category == 'Hematologic':
                 # Ann Arbor staging for lymphomas, simplified for others
-                if 'lymphoma' in row['cancer_type'].lower():
+                if 'lymphoma' in str(row['cancer_type']).lower():
                     stage = np.random.choice(['I', 'II', 'III', 'IV'], p=[0.2, 0.3, 0.3, 0.2])
                 else:
                     stage = np.random.choice(['I', 'II', 'III', 'IV'], p=[0.25, 0.25, 0.25, 0.25])
@@ -211,21 +212,23 @@ class MIMICOncologyExtractor:
             NULL as drug_name
         FROM `{self.client.mimic_dataset}.procedures_icd` p
         WHERE p.subject_id IN ({subject_ids_str})
+        AND p.chartdate IS NOT NULL
         
         UNION ALL
         
-        -- Get prescriptions (oncology-related)
+        -- Get prescriptions (oncology-related) - FIXED SCHEMA
         SELECT 
             pr.subject_id,
             pr.hadm_id,
-            pr.starttime as event_date,
+            DATETIME(pr.starttime) as event_date,  -- Convert to datetime
             'prescription' as event_type,
             NULL as icd_code,
             NULL as icd_version,
             pr.drug,
-            pr.drug as drug_name  -- Use 'drug' column for both
+            pr.drug as drug_name  -- Use same column for compatibility
         FROM `{self.client.mimic_dataset}.prescriptions` pr
         WHERE pr.subject_id IN ({subject_ids_str})
+        AND pr.starttime IS NOT NULL
         AND (
             LOWER(pr.drug) LIKE '%chemo%' OR
             LOWER(pr.drug) LIKE '%oncol%' OR
@@ -242,14 +245,19 @@ class MIMICOncologyExtractor:
             LOWER(pr.drug) LIKE '%rituximab%' OR
             LOWER(pr.drug) LIKE '%bevacizumab%' OR
             LOWER(pr.drug) LIKE '%trastuzumab%' OR
-            LOWER(pr.drug) LIKE '%levothyroxine%'
+            LOWER(pr.drug) LIKE '%levothyroxine%' OR
+            LOWER(pr.drug) LIKE '%prednisone%' OR
+            LOWER(pr.drug) LIKE '%prednisolone%'
         )
         
         ORDER BY subject_id, event_date
+        LIMIT 1000  -- Limit to avoid large result sets
         """
         
         try:
-            return self.client.client.query(query).to_dataframe()
+            result = self.client.client.query(query).to_dataframe()
+            logger.info(f"Extracted {len(result)} clinical events from MIMIC-IV")
+            return result
         except Exception as e:
             logger.error(f"Error extracting clinical events: {str(e)}")
             return pd.DataFrame()
@@ -298,8 +306,10 @@ class MIMICOncologyExtractor:
                 
                 event_time = pd.to_datetime(event['event_date'])
                 
-                # Skip events before diagnosis
+                # Skip events before diagnosis or too far in future
                 if event_time < start_time:
+                    continue
+                if (event_time - start_time).days > 1095:  # Skip events > 3 years
                     continue
                 
                 # Map procedures to treatment types
@@ -367,6 +377,8 @@ class MIMICOncologyExtractor:
                 return 'Bevacizumab'
             elif any(d in drug_name or d in drug for d in ['levothyroxine']):
                 return 'Levothyroxine'
+            elif any(d in drug_name or d in drug for d in ['prednisone', 'prednisolone']):
+                return 'Corticosteroids'
             elif any(d in drug_name or d in drug for d in ['chemo']):
                 return 'Chemotherapy'
             else:
@@ -376,15 +388,17 @@ class MIMICOncologyExtractor:
             # Map common procedure codes to surgeries
             icd_code = str(event.get('icd_code', ''))
             
-            # This is simplified - in reality you'd have comprehensive procedure mappings
-            if cancer_type == 'Papillary Thyroid Carcinoma':
+            # Simplified procedure mapping based on cancer type
+            if 'thyroid' in str(cancer_type).lower():
                 return np.random.choice(['Total Thyroidectomy', 'Lobectomy'], p=[0.7, 0.3])
-            elif 'Colorectal' in cancer_type:
+            elif 'colorectal' in str(cancer_type).lower():
                 return np.random.choice(['Colectomy', 'Low Anterior Resection'], p=[0.6, 0.4])
-            elif 'Gastric' in cancer_type:
+            elif 'gastric' in str(cancer_type).lower():
                 return 'Gastrectomy'
-            elif 'Lung' in cancer_type:
+            elif 'lung' in str(cancer_type).lower():
                 return np.random.choice(['Lobectomy', 'Wedge Resection'], p=[0.7, 0.3])
+            elif 'breast' in str(cancer_type).lower():
+                return np.random.choice(['Lumpectomy', 'Mastectomy'], p=[0.6, 0.4])
             else:
                 return 'Surgical Procedure'
         
@@ -401,7 +415,9 @@ class MIMICOncologyExtractor:
             'Genitourinary': ['UTI', 'Erectile Dysfunction', 'Urinary Incontinence'],
             'Gynecologic': ['Lymphedema', 'Bowel Dysfunction', 'Sexual Dysfunction'],
             'Central Nervous System': ['Seizures', 'Cognitive Impairment', 'Neurological Deficit'],
-            'Dermatologic': ['Wound Infection', 'Lymphedema', 'Scarring']
+            'Dermatologic': ['Wound Infection', 'Lymphedema', 'Scarring'],
+            'Breast': ['Lymphedema', 'Seroma', 'Nerve Damage'],
+            'Other': ['General Complication', 'Fatigue', 'Infection']
         }
         
         category_complications = complications_by_category.get(cancer_category, ['General Complication'])
@@ -449,20 +465,24 @@ class MIMICOncologyExtractor:
             'Dermatologic': {
                 'outcomes': ['No Evidence of Disease', 'Recurrence', 'Stable Disease'],
                 'probabilities': [0.75, 0.20, 0.05]
+            },
+            'Breast': {
+                'outcomes': ['Disease Free', 'Recurrence', 'Stable Disease'],
+                'probabilities': [0.70, 0.20, 0.10]
+            },
+            'Other': {
+                'outcomes': ['Stable Disease', 'Progressive Disease', 'Complete Response'],
+                'probabilities': [0.50, 0.30, 0.20]
             }
         }
         
-        pattern = outcome_patterns.get(cancer_category, {
-            'outcomes': ['Stable Disease', 'Progressive Disease', 'Complete Response'],
-            'probabilities': [0.50, 0.30, 0.20]
-        })
+        pattern = outcome_patterns.get(cancer_category, outcome_patterns['Other'])
         
         return np.random.choice(pattern['outcomes'], p=pattern['probabilities'])
     
     def _add_outcomes(self, patients_df: pd.DataFrame) -> pd.DataFrame:
         """Add outcome information to patients dataframe."""
         
-        # This would typically be calculated from the events, but for now we'll add it directly
         patients_df = patients_df.copy()
         
         # Add outcome_days (time from diagnosis to outcome)
@@ -470,7 +490,7 @@ class MIMICOncologyExtractor:
         
         return patients_df
 
-def extract_oncology_cohort(project_id: str = None, limit: int = 1000) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
+def extract_oncology_cohort(project_id: str = None, limit: int = 100) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
     """
     Main function to extract oncology cohort from MIMIC-IV.
     
@@ -490,14 +510,23 @@ def extract_oncology_cohort(project_id: str = None, limit: int = 1000) -> Tuple[
             'total_patients': len(patients_df),
             'demographics': {
                 'gender': patients_df['gender'].value_counts().to_dict(),
-                'age_mean': patients_df['age'].mean(),
-                'age_std': patients_df['age'].std()
+                'age_mean': float(patients_df['age'].mean()),
+                'age_std': float(patients_df['age'].std())
             },
             'cancer_types': patients_df['cancer_type'].value_counts().to_dict(),
             'cancer_categories': patients_df['cancer_category'].value_counts().to_dict(),
             'mortality': {
-                'mortality_rate': (patients_df['dod'].notna()).mean() if 'dod' in patients_df.columns else 0.0
+                'mortality_rate': float((patients_df['dod'].notna()).mean() if 'dod' in patients_df.columns else 0.0)
             }
+        }
+    else:
+        # Return empty summary if no patients found
+        summary = {
+            'total_patients': 0,
+            'demographics': {'gender': {}, 'age_mean': 0, 'age_std': 0},
+            'cancer_types': {},
+            'cancer_categories': {},
+            'mortality': {'mortality_rate': 0.0}
         }
     
     return patients_df, events_df, summary

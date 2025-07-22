@@ -34,67 +34,30 @@ st.set_page_config(
 )
 
 # =============================================
-# REAL DATA LOADING FROM MIMIC-IV
+# REAL DATA LOADING FROM MIMIC-IV - FIXED
 # =============================================
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes, no spinner conflicts
-def load_mimic_oncology_data(project_id: str = None, limit: int = 1000):
-    """Load real oncology data from MIMIC-IV."""
+def load_mimic_oncology_data_no_cache(project_id: str, limit: int = 100):
+    """Load real oncology data from MIMIC-IV without caching conflicts."""
     
     logger.info(f"🔄 Loading MIMIC-IV oncology data (limit: {limit})")
     
-    if not project_id:
-        st.error("❌ Project ID is required. Please enter your Google Cloud Project ID.")
-        return None, None, None
+    if not project_id or project_id.strip() == "":
+        raise ValueError("Project ID is required")
     
+    # Extract real oncology cohort directly
     try:
-        # Test connection first with detailed feedback
-        st.info(f"🔗 Testing connection to project: {project_id}")
-        
-        if not test_connection(project_id):
-            st.error("❌ Cannot connect to MIMIC-IV BigQuery.")
-            st.markdown("""
-            **Troubleshooting steps:**
-            
-            1. **Run the setup script:**
-            ```bash
-            python setup_auth.py
-            ```
-            
-            2. **Check your authentication:**
-            ```bash
-            gcloud auth application-default login
-            gcloud config set project mimic-oncology-pathways
-            ```
-            
-            3. **Verify MIMIC-IV access:**
-            - Make sure you completed MIMIC-IV training
-            - Check you have access to physionet-data datasets
-            - Verify your project ID is correct
-            """)
-            return None, None, None
-        
-        st.success("✅ Connected to BigQuery successfully!")
-        st.info("🔍 Extracting oncology patients from MIMIC-IV...")
-        
-        # Extract real oncology cohort
         patients_df, events_df, summary = extract_oncology_cohort(project_id, limit)
         
         if len(patients_df) == 0:
-            st.warning("⚠️ No oncology patients found in MIMIC-IV with current query.")
-            st.markdown("""
-            **This could mean:**
-            - The ICD code mapping needs adjustment
-            - The dataset has limited oncology cases
-            - Try increasing the patient limit
-            """)
-            return None, None, None
+            raise ValueError("No oncology patients found in MIMIC-IV")
         
         # Add outcome information from events if not already present
-        if 'outcome' not in patients_df.columns:
+        if 'outcome' not in patients_df.columns and len(events_df) > 0:
             outcomes = events_df[events_df['event_type'] == 'outcome'][['subject_id', 'event_subtype', 'days_from_start']]
-            outcomes.columns = ['subject_id', 'outcome', 'outcome_days']
-            patients_df = patients_df.merge(outcomes, on='subject_id', how='left')
+            if len(outcomes) > 0:
+                outcomes.columns = ['subject_id', 'outcome', 'outcome_days']
+                patients_df = patients_df.merge(outcomes, on='subject_id', how='left')
         
         # Fill missing outcomes
         patients_df['outcome'] = patients_df['outcome'].fillna('Unknown')
@@ -104,38 +67,11 @@ def load_mimic_oncology_data(project_id: str = None, limit: int = 1000):
         return patients_df, events_df, summary
         
     except Exception as e:
-        error_msg = str(e)
-        st.error(f"❌ Error loading MIMIC-IV data: {error_msg}")
-        
-        # Provide specific help based on error type
-        if "403" in error_msg or "Access Denied" in error_msg:
-            st.markdown("""
-            **403 Access Denied Error:**
-            
-            1. **Check MIMIC-IV access:**
-            - Complete training at: https://physionet.org/
-            - Request access to MIMIC-IV on Google Cloud
-            - Wait for approval (can take 1-2 days)
-            
-            2. **Verify authentication:**
-            ```bash
-            gcloud auth application-default login
-            ```
-            """)
-        elif "404" in error_msg or "Not found" in error_msg:
-            st.markdown("""
-            **404 Not Found Error:**
-            
-            - Check your project ID is correct
-            - Verify the dataset names exist in your project
-            - Make sure you have the right MIMIC-IV version
-            """)
-        
-        logger.error(f"Error loading MIMIC-IV data: {error_msg}")
-        return None, None, None
+        logger.error(f"Error loading MIMIC-IV data: {str(e)}")
+        raise e
 
 # =============================================
-# HELPER FUNCTIONS (SAME AS BEFORE)
+# HELPER FUNCTIONS (OPTIMIZED)
 # =============================================
 
 def filter_data(patients_df, events_df, filters):
@@ -191,31 +127,36 @@ def filter_data(patients_df, events_df, filters):
         ]
     
     # Time window filter
-    filtered_events = filtered_events[
-        filtered_events['days_from_start'] <= filters['time_window']
-    ]
+    if len(filtered_events) > 0:
+        filtered_events = filtered_events[
+            filtered_events['days_from_start'] <= filters['time_window']
+        ]
     
     # Complications filter
-    if not filters['include_complications']:
+    if not filters['include_complications'] and len(filtered_events) > 0:
         filtered_events = filtered_events[filtered_events['event_type'] != 'complication']
     
     # Pathway length filter
-    pathway_lengths = filtered_events.groupby('subject_id').size()
-    patients_meeting_length = pathway_lengths[
-        pathway_lengths >= filters['min_pathway_length']
-    ].index.tolist()
-    
-    filtered_patients = filtered_patients[
-        filtered_patients['subject_id'].isin(patients_meeting_length)
-    ]
-    filtered_events = filtered_events[
-        filtered_events['subject_id'].isin(patients_meeting_length)
-    ]
+    if len(filtered_events) > 0:
+        pathway_lengths = filtered_events.groupby('subject_id').size()
+        patients_meeting_length = pathway_lengths[
+            pathway_lengths >= filters['min_pathway_length']
+        ].index.tolist()
+        
+        filtered_patients = filtered_patients[
+            filtered_patients['subject_id'].isin(patients_meeting_length)
+        ]
+        filtered_events = filtered_events[
+            filtered_events['subject_id'].isin(patients_meeting_length)
+        ]
     
     return filtered_patients, filtered_events
 
 def create_sankey_data(events_df):
     """Create data for Sankey diagram."""
+    
+    if len(events_df) == 0:
+        return None
     
     # Get transitions for each patient
     transitions = []
@@ -235,12 +176,15 @@ def create_sankey_data(events_df):
             
             transitions.append((source, target))
     
+    if not transitions:
+        return None
+    
     # Count transitions
     from collections import Counter
     transition_counts = Counter(transitions)
     
-    # Only include transitions with at least 3 patients for clarity
-    filtered_transitions = {k: v for k, v in transition_counts.items() if v >= 3}
+    # Only include transitions with at least 2 patients for clarity
+    filtered_transitions = {k: v for k, v in transition_counts.items() if v >= 2}
     
     if not filtered_transitions:
         return None
@@ -290,6 +234,9 @@ def build_transition_graph(events_df):
     G = nx.DiGraph()
     transitions = {}
     
+    if len(events_df) == 0:
+        return G, transitions
+    
     for patient_id in events_df['subject_id'].unique():
         patient_events = events_df[events_df['subject_id'] == patient_id].sort_values('timestamp')
         
@@ -315,11 +262,25 @@ def build_transition_graph(events_df):
     return G, transitions
 
 # =============================================
-# SIDEBAR FILTERS
+# SIDEBAR FILTERS (SAFE)
 # =============================================
 
 def create_sidebar_filters(patients_df: pd.DataFrame, events_df: pd.DataFrame):
     """Create sidebar filter controls."""
+    
+    if len(patients_df) == 0:
+        return {
+            'cancer_categories': [],
+            'cancer_types': [],
+            'age_range': (18, 90),
+            'gender': 'All',
+            'stages': [],
+            'outcomes': [],
+            'selected_treatments': [],
+            'min_pathway_length': 2,
+            'time_window': 365,
+            'include_complications': True
+        }
     
     st.sidebar.header("🎛️ Filters & Settings")
     
@@ -334,7 +295,7 @@ def create_sidebar_filters(patients_df: pd.DataFrame, events_df: pd.DataFrame):
     # Filter cancer types based on selected categories
     available_cancer_types = patients_df[
         patients_df['cancer_category'].isin(cancer_categories)
-    ]['cancer_type'].unique()
+    ]['cancer_type'].unique() if cancer_categories else patients_df['cancer_type'].unique()
     
     # Detailed Cancer Type Filter
     st.sidebar.subheader("Specific Cancer Types")
@@ -379,7 +340,7 @@ def create_sidebar_filters(patients_df: pd.DataFrame, events_df: pd.DataFrame):
     # Treatment Filters
     st.sidebar.subheader("Treatment Filters")
     
-    treatment_events = events_df[events_df['event_type'].isin(['treatment', 'surgery'])]
+    treatment_events = events_df[events_df['event_type'].isin(['treatment', 'surgery'])] if len(events_df) > 0 else pd.DataFrame()
     all_treatments = sorted(treatment_events['event_subtype'].unique()) if len(treatment_events) > 0 else []
     
     if all_treatments:
@@ -398,8 +359,8 @@ def create_sidebar_filters(patients_df: pd.DataFrame, events_df: pd.DataFrame):
     min_pathway_length = st.sidebar.slider(
         "Minimum Pathway Length",
         min_value=2,
-        max_value=15,
-        value=3,
+        max_value=10,
+        value=2,
         help="Minimum number of events in patient pathway"
     )
     
@@ -407,7 +368,7 @@ def create_sidebar_filters(patients_df: pd.DataFrame, events_df: pd.DataFrame):
         "Time Window (days)",
         min_value=30,
         max_value=1095,
-        value=730,
+        value=365,
         help="Include events within this timeframe from first diagnosis"
     )
     
@@ -431,7 +392,7 @@ def create_sidebar_filters(patients_df: pd.DataFrame, events_df: pd.DataFrame):
     }
 
 # =============================================
-# DASHBOARD PAGES (SAME FUNCTIONALITY)
+# DASHBOARD PAGES (SAFE)
 # =============================================
 
 def dashboard_home(patients_df, events_df):
@@ -487,36 +448,6 @@ def dashboard_home(patients_df, events_df):
         )
         st.plotly_chart(fig, use_container_width=True)
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Age distribution by cancer category
-        fig = px.box(
-            patients_df, 
-            x='cancer_category', 
-            y='age',
-            title="Age Distribution by Cancer Category",
-            color='cancer_category'
-        )
-        fig.update_layout(xaxis_title="Cancer Category", yaxis_title="Age")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        # Outcome comparison across cancer categories
-        outcome_category = pd.crosstab(patients_df['cancer_category'], patients_df['outcome'])
-        outcome_category_pct = outcome_category.div(outcome_category.sum(axis=1), axis=0) * 100
-        
-        fig = px.bar(
-            outcome_category_pct, 
-            title="Outcome Distribution by Cancer Category (%)",
-            barmode='group'
-        )
-        fig.update_layout(
-            xaxis_title="Cancer Category", 
-            yaxis_title="Percentage of Patients"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
     # Summary statistics table
     st.subheader("📊 MIMIC-IV Cancer Category Summary")
     
@@ -567,11 +498,17 @@ def cohort_explorer(patients_df, events_df):
     
     # Format display
     if 'first_admission' in display_df.columns:
-        display_df['first_admission'] = pd.to_datetime(display_df['first_admission']).dt.strftime('%Y-%m-%d')
+        display_df['first_admission'] = pd.to_datetime(display_df['first_admission'], errors='coerce').dt.strftime('%Y-%m-%d')
+    
+    # Safe column selection
+    available_cols = ['subject_id', 'age', 'gender', 'cancer_category', 'cancer_type', 'stage', 'outcome', 'outcome_days']
+    display_cols = [col for col in available_cols if col in display_df.columns]
+    
+    if 'first_admission' in display_df.columns:
+        display_cols.append('first_admission')
     
     st.dataframe(
-        display_df[['subject_id', 'age', 'gender', 'cancer_category', 'cancer_type', 'stage', 
-                   'first_admission', 'outcome', 'outcome_days']],
+        display_df[display_cols],
         use_container_width=True,
         column_config={
             "subject_id": "Patient ID",
@@ -612,6 +549,10 @@ def pathway_flow_visualizer(patients_df, events_df):
     
     st.header("🌊 Real Pathway Flow Visualizer")
     
+    if len(events_df) == 0:
+        st.warning("⚠️ No clinical events found. This may be normal for the current data extraction.")
+        return
+    
     # Sankey Diagram
     st.subheader("Treatment Flow (Sankey Diagram) - Real MIMIC-IV Data")
     
@@ -646,10 +587,10 @@ def pathway_flow_visualizer(patients_df, events_df):
         total_transitions = len(sankey_data['links'])
         
         st.info(f"📊 Showing {total_transitions} common transitions for {total_patients} real MIMIC-IV patients. "
-               f"Only transitions with ≥3 patients are displayed for clarity.")
+               f"Only transitions with ≥2 patients are displayed for clarity.")
         
     else:
-        st.warning("⚠️ No common treatment pathways found with current filters.")
+        st.info("ℹ️ No common treatment pathways found. This is normal for small datasets or filtered views.")
     
     # Transition frequency table
     st.subheader("Real Event Transition Frequencies")
@@ -710,43 +651,46 @@ def patient_timeline_viewer(patients_df, events_df):
             st.metric("Outcome", patient_info['outcome'])
         
         # Timeline visualization
-        fig = go.Figure()
-        
-        colors = {'diagnosis': 'red', 'treatment': 'blue', 'complication': 'orange', 'outcome': 'green', 'surgery': 'purple', 'diagnostic': 'gray'}
-        
-        for i, (_, event) in enumerate(patient_events.iterrows()):
-            fig.add_trace(go.Scatter(
-                x=[event['days_from_start']],
-                y=[event['event_type']],
-                mode='markers',
-                marker=dict(
-                    size=15,
-                    color=colors.get(event['event_type'], 'gray'),
-                    symbol='circle'
-                ),
-                name=event['event_subtype'],
-                text=f"Day {event['days_from_start']}: {event['event_subtype']}",
-                showlegend=False
-            ))
-        
-        fig.update_layout(
-            title=f"Real Timeline for MIMIC-IV Patient {selected_patient}",
-            xaxis_title="Days from First Event",
-            yaxis_title="Event Type",
-            height=400
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Event details table
-        st.subheader("Real Event Details")
-        display_events = patient_events.copy()
-        display_events['timestamp'] = display_events['timestamp'].dt.strftime('%Y-%m-%d')
-        
-        st.dataframe(
-            display_events[['event_type', 'event_subtype', 'timestamp', 'days_from_start']],
-            use_container_width=True
-        )
+        if len(patient_events) > 0:
+            fig = go.Figure()
+            
+            colors = {'diagnosis': 'red', 'treatment': 'blue', 'complication': 'orange', 'outcome': 'green', 'surgery': 'purple', 'diagnostic': 'gray'}
+            
+            for i, (_, event) in enumerate(patient_events.iterrows()):
+                fig.add_trace(go.Scatter(
+                    x=[event['days_from_start']],
+                    y=[event['event_type']],
+                    mode='markers',
+                    marker=dict(
+                        size=15,
+                        color=colors.get(event['event_type'], 'gray'),
+                        symbol='circle'
+                    ),
+                    name=event['event_subtype'],
+                    text=f"Day {event['days_from_start']}: {event['event_subtype']}",
+                    showlegend=False
+                ))
+            
+            fig.update_layout(
+                title=f"Real Timeline for MIMIC-IV Patient {selected_patient}",
+                xaxis_title="Days from First Event",
+                yaxis_title="Event Type",
+                height=400
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Event details table
+            st.subheader("Real Event Details")
+            display_events = patient_events.copy()
+            display_events['timestamp'] = display_events['timestamp'].dt.strftime('%Y-%m-%d')
+            
+            st.dataframe(
+                display_events[['event_type', 'event_subtype', 'timestamp', 'days_from_start']],
+                use_container_width=True
+            )
+        else:
+            st.info("No clinical events recorded for this patient.")
 
 def digital_twin_matcher(patients_df, events_df):
     """Find similar patients (digital twins) based on input criteria using real data."""
@@ -772,7 +716,7 @@ def digital_twin_matcher(patients_df, events_df):
     
     with col3:
         age_tolerance = st.slider("Age Tolerance (±years)", min_value=1, max_value=15, value=10)
-        min_matches = st.slider("Minimum Matches Required", min_value=3, max_value=20, value=5)
+        min_matches = st.slider("Minimum Matches Required", min_value=1, max_value=10, value=3)
     
     # Find similar patients
     if st.button("🔍 Find Similar MIMIC-IV Patients", type="primary"):
@@ -795,6 +739,7 @@ def digital_twin_matcher(patients_df, events_df):
             st.subheader("🎯 Top Real Digital Twin Matches")
             
             display_cols = ['subject_id', 'age', 'gender', 'cancer_type', 'stage', 'outcome', 'outcome_days']
+            display_cols = [col for col in display_cols if col in similar_patients.columns]
             top_matches = similar_patients.head(10)[display_cols]
             
             st.dataframe(top_matches, use_container_width=True, hide_index=True)
@@ -823,47 +768,6 @@ def digital_twin_matcher(patients_df, events_df):
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Treatment pathway analysis
-            st.subheader("🏥 Real Treatment Pathways from MIMIC-IV")
-            
-            similar_patient_ids = similar_patients['subject_id'].tolist()
-            similar_events = events_df[events_df['subject_id'].isin(similar_patient_ids)]
-            
-            treatment_events = similar_events[similar_events['event_type'].isin(['treatment', 'surgery'])]
-            if len(treatment_events) > 0:
-                treatment_counts = treatment_events['event_subtype'].value_counts().head(8)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Most Common Real Treatments:**")
-                    for treatment, count in treatment_counts.items():
-                        percentage = (count / len(similar_patients)) * 100
-                        st.write(f"• {treatment}: {count} patients ({percentage:.1f}%)")
-                
-                with col2:
-                    fig = px.bar(
-                        x=treatment_counts.values,
-                        y=treatment_counts.index,
-                        orientation='h',
-                        title="Real Treatment Frequency"
-                    )
-                    fig.update_layout(xaxis_title="Number of Patients")
-                    st.plotly_chart(fig, use_container_width=True)
-            
-            # Clinical insights
-            st.subheader("💡 Clinical Insights from Real Data")
-            
-            good_outcomes = ['Complete Remission', 'Disease Free', 'No Evidence of Disease', 'Cure', 'Remission']
-            good_outcome_rate = similar_patients['outcome'].isin(good_outcomes).mean() * 100
-            
-            if good_outcome_rate >= 70:
-                st.success(f"🎉 Based on real MIMIC-IV data: {good_outcome_rate:.1f}% of similar patients achieved good outcomes")
-            elif good_outcome_rate >= 50:
-                st.info(f"✅ Based on real MIMIC-IV data: {good_outcome_rate:.1f}% of similar patients achieved good outcomes")
-            else:
-                st.warning(f"⚠️ Based on real MIMIC-IV data: {good_outcome_rate:.1f}% of similar patients achieved good outcomes")
-            
             # Export similar patients
             csv_data = similar_patients.to_csv(index=False)
             st.download_button(
@@ -878,165 +782,13 @@ def digital_twin_matcher(patients_df, events_df):
             
             if len(similar_patients) > 0:
                 st.write(f"\n**{len(similar_patients)} patients found with current criteria:**")
-                st.dataframe(similar_patients[['subject_id', 'age', 'outcome']].head(), 
+                display_cols = ['subject_id', 'age', 'outcome']
+                display_cols = [col for col in display_cols if col in similar_patients.columns]
+                st.dataframe(similar_patients[display_cols].head(), 
                            use_container_width=True, hide_index=True)
 
-def outcome_comparator(patients_df, events_df):
-    """Compare outcomes between different pathways or groups using real data."""
-    
-    st.header("⚖️ Real Outcome Comparator")
-    
-    # Group selection
-    st.subheader("Select Groups to Compare (Real MIMIC-IV Data)")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Group A**")
-        group_a_cancer = st.selectbox("Cancer Type A", patients_df['cancer_type'].unique())
-        group_a_stage = st.selectbox("Stage A", patients_df['stage'].unique())
-    
-    with col2:
-        st.write("**Group B**")  
-        group_b_cancer = st.selectbox("Cancer Type B", patients_df['cancer_type'].unique(), index=1)
-        group_b_stage = st.selectbox("Stage B", patients_df['stage'].unique(), index=1)
-    
-    # Filter groups
-    group_a = patients_df[
-        (patients_df['cancer_type'] == group_a_cancer) & 
-        (patients_df['stage'] == group_a_stage)
-    ]
-    
-    group_b = patients_df[
-        (patients_df['cancer_type'] == group_b_cancer) & 
-        (patients_df['stage'] == group_b_stage)
-    ]
-    
-    if len(group_a) > 0 and len(group_b) > 0:
-        # Comparison results
-        st.subheader("Real Data Comparison Results")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric(f"Group A Patients", len(group_a))
-            good_outcomes = ['Complete Remission', 'Disease Free', 'No Evidence of Disease', 'Cure', 'Remission']
-            good_a = group_a['outcome'].isin(good_outcomes).mean() * 100
-            st.metric(f"Group A Good Outcome Rate", f"{good_a:.1f}%")
-        
-        with col2:
-            st.metric(f"Group B Patients", len(group_b))
-            good_b = group_b['outcome'].isin(good_outcomes).mean() * 100
-            st.metric(f"Group B Good Outcome Rate", f"{good_b:.1f}%")
-        
-        with col3:
-            # Statistical test
-            try:
-                contingency_table = pd.crosstab(
-                    pd.concat([group_a['outcome'], group_b['outcome']]),
-                    ['Group A'] * len(group_a) + ['Group B'] * len(group_b)
-                )
-                
-                if contingency_table.shape == (2, 2):
-                    _, p_value = fisher_exact(contingency_table)
-                    st.metric("Fisher's Exact p-value", f"{p_value:.4f}")
-                else:
-                    chi2, p_value, _, _ = chi2_contingency(contingency_table)
-                    st.metric("Chi-square p-value", f"{p_value:.4f}")
-            except:
-                st.metric("Statistical Test", "N/A")
-        
-        # Visualization
-        comparison_data = pd.DataFrame({
-            'Group': ['A'] * len(group_a) + ['B'] * len(group_b),
-            'Outcome': list(group_a['outcome']) + list(group_b['outcome']),
-            'Outcome_Days': list(group_a['outcome_days']) + list(group_b['outcome_days'])
-        })
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            fig = px.histogram(comparison_data, x='Outcome', color='Group', 
-                             barmode='group', title="Real Outcome Distribution")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.box(comparison_data, x='Group', y='Outcome_Days',
-                        title="Real Time to Outcome (Days)")
-            st.plotly_chart(fig, use_container_width=True)
-    
-    else:
-        st.warning("One or both groups have no patients. Please adjust your selection.")
-
-def survival_analysis(patients_df, events_df):
-    """Perform survival analysis with Kaplan-Meier curves using real data."""
-    
-    st.header("📈 Real Survival Analysis")
-    
-    # Stratification options
-    strat_var = st.selectbox(
-        "Stratify by:",
-        options=['cancer_type', 'stage', 'gender', 'cancer_category']
-    )
-    
-    # Prepare survival data
-    survival_data = patients_df.copy()
-    
-    # Define event (1 for death, 0 for censored)
-    survival_data['event'] = (survival_data['outcome'] == 'Death').astype(int)
-    survival_data['duration'] = survival_data['outcome_days']
-    
-    # Kaplan-Meier analysis
-    fig = go.Figure()
-    
-    colors = px.colors.qualitative.Set1
-    
-    for i, group in enumerate(survival_data[strat_var].unique()):
-        group_data = survival_data[survival_data[strat_var] == group]
-        
-        if len(group_data) > 3:  # Minimum group size
-            kmf = KaplanMeierFitter()
-            kmf.fit(group_data['duration'], group_data['event'], label=str(group))
-            
-            # Add survival curve
-            fig.add_trace(go.Scatter(
-                x=kmf.timeline,
-                y=kmf.survival_function_[str(group)],
-                mode='lines',
-                name=f'{strat_var}: {group}',
-                line=dict(color=colors[i % len(colors)])
-            ))
-    
-    fig.update_layout(
-        title=f"Real Kaplan-Meier Survival Curves by {strat_var.title()} (MIMIC-IV Data)",
-        xaxis_title="Days",
-        yaxis_title="Survival Probability",
-        height=500
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Summary statistics
-    st.subheader("Real Survival Summary")
-    
-    summary_data = []
-    for group in survival_data[strat_var].unique():
-        group_data = survival_data[survival_data[strat_var] == group]
-        
-        if len(group_data) > 0:
-            summary_data.append({
-                'Group': group,
-                'N': len(group_data),
-                'Events': group_data['event'].sum(),
-                'Median Survival': group_data['duration'].median(),
-                'Event Rate': f"{group_data['event'].mean():.1%}"
-            })
-    
-    summary_df = pd.DataFrame(summary_data)
-    st.dataframe(summary_df, use_container_width=True)
-
 # =============================================
-# MAIN APPLICATION
+# MAIN APPLICATION (FIXED)
 # =============================================
 
 def main():
@@ -1047,35 +799,94 @@ def main():
     st.markdown("**Analyzing Real Clinical Pathways from MIMIC-IV Dataset**")
     st.markdown("*Real patient data • Actual treatment patterns • Evidence-based outcomes*")
     
+    # Initialize session state
+    if 'data_loaded' not in st.session_state:
+        st.session_state.data_loaded = False
+        st.session_state.patients_df = None
+        st.session_state.events_df = None
+        st.session_state.summary = None
+    
     # Configuration section
     st.sidebar.header("⚙️ Configuration")
     
     # Project ID input
     project_id = st.sidebar.text_input(
         "Google Cloud Project ID",
-        value="mimic-oncology-pathways",  # Default from your screenshots
+        value="mimic-oncology-pathways",
         help="Your Google Cloud Project ID with BigQuery access to MIMIC-IV"
     )
     
-    # Authentication status
-    st.sidebar.subheader("🔐 Authentication Status")
+    # Data limit
+    data_limit = st.sidebar.slider(
+        "Max Patients to Load",
+        min_value=5,
+        max_value=100,
+        value=10,
+        help="Number of oncology patients to extract from MIMIC-IV"
+    )
     
-    # Test connection button
-    col1, col2 = st.sidebar.columns(2)
-    
-    with col1:
-        if st.button("🧪 Test Connection"):
-            with st.spinner("Testing BigQuery connection..."):
-                if test_connection(project_id):
-                    st.sidebar.success("✅ Connected to MIMIC-IV")
-                else:
-                    st.sidebar.error("❌ Connection failed")
-                    st.sidebar.info("💡 Run setup_auth.py for help")
-    
-    with col2:
-        if st.button("🔄 Clear Cache"):
-            st.cache_data.clear()
-            st.sidebar.success("Cache cleared!")
+    # Load data button
+    if st.sidebar.button("🔄 Load MIMIC-IV Data", type="primary"):
+        
+        if not project_id or project_id.strip() == "":
+            st.sidebar.error("Please enter a valid Project ID")
+        else:
+            # Clear previous data
+            st.session_state.data_loaded = False
+            st.session_state.patients_df = None
+            st.session_state.events_df = None
+            st.session_state.summary = None
+            
+            with st.spinner(f"🔄 Loading {data_limit} oncology patients from MIMIC-IV..."):
+                try:
+                    # Test connection first
+                    st.info(f"🔗 Testing connection to project: {project_id}")
+                    if not test_connection(project_id):
+                        st.error("❌ Cannot connect to MIMIC-IV BigQuery. Please check your setup.")
+                        st.stop()
+                    
+                    st.success("✅ Connected to BigQuery successfully!")
+                    st.info("🔍 Extracting oncology patients from MIMIC-IV...")
+                    
+                    # Load data
+                    patients_df, events_df, summary = load_mimic_oncology_data_no_cache(project_id, data_limit)
+                    
+                    # Store in session state
+                    st.session_state.patients_df = patients_df
+                    st.session_state.events_df = events_df
+                    st.session_state.summary = summary
+                    st.session_state.data_loaded = True
+                    
+                    st.success(f"✅ Successfully loaded {len(patients_df)} patients with {len(events_df)} events")
+                    st.rerun()
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    st.error(f"❌ Error loading MIMIC-IV data: {error_msg}")
+                    
+                    # Provide specific help based on error type
+                    if "403" in error_msg or "Access Denied" in error_msg:
+                        st.markdown("""
+                        **403 Access Denied Error:**
+                        
+                        1. **Check MIMIC-IV access:**
+                        - Complete training at: https://physionet.org/
+                        - Request access to MIMIC-IV on Google Cloud
+                        - Wait for approval (can take 1-2 days)
+                        
+                        2. **Verify authentication:**
+                        ```bash
+                        gcloud auth application-default login
+                        ```
+                        """)
+                    elif "404" in error_msg or "Not found" in error_msg:
+                        st.markdown("""
+                        **404 Not Found Error:**
+                        
+                        - Check your project ID is correct
+                        - Verify the dataset names exist in your project
+                        - Make sure you have the right MIMIC-IV version
+                        """)
     
     # Show authentication help
     with st.sidebar.expander("🆘 Authentication Help"):
@@ -1099,22 +910,30 @@ def main():
         ```
         """)
     
-    # Data limit
-    data_limit = st.sidebar.slider(
-        "Max Patients to Load",
-        min_value=5,
-        max_value=1000,
-        value=5,  # Start smaller for testing
-        help="Number of oncology patients to extract from MIMIC-IV"
-    )
-    
-    # Load real data
-    with st.spinner("🔄 Loading real MIMIC-IV oncology data..."):
-        patients_df, events_df, summary = load_mimic_oncology_data(project_id, data_limit)
-    
-    if patients_df is None or events_df is None:
-        st.error("❌ Failed to load MIMIC-IV data. Please check your configuration and try again.")
+    # Main application logic
+    if not st.session_state.data_loaded:
+        st.info("👆 Please load MIMIC-IV data using the sidebar to get started.")
+        st.markdown("""
+        ### 🚀 Getting Started
+        
+        1. **Enter your Google Cloud Project ID** in the sidebar
+        2. **Set the number of patients** to load (start with 10-20)
+        3. **Click "Load MIMIC-IV Data"** to extract real patient data
+        4. **Explore the dashboard** once data is loaded
+        
+        ### 📋 What You'll Get
+        
+        - **Real patient demographics** from MIMIC-IV
+        - **Actual cancer diagnoses** based on ICD codes
+        - **Clinical pathways** from real hospital data
+        - **Treatment patterns** and outcomes
+        """)
         st.stop()
+    
+    # Get data from session state
+    patients_df = st.session_state.patients_df
+    events_df = st.session_state.events_df
+    summary = st.session_state.summary
     
     # Show dataset info
     with st.expander("📋 Real MIMIC-IV Dataset Information", expanded=True):
@@ -1167,9 +986,7 @@ def main():
             "Cohort Explorer", 
             "Pathway Flow",
             "Patient Timeline",
-            "Digital Twin Matcher",
-            "Outcome Comparison",
-            "Survival Analysis"
+            "Digital Twin Matcher"
         ]
     )
     
@@ -1193,10 +1010,6 @@ def main():
         patient_timeline_viewer(filtered_patients, filtered_events)
     elif selected_page == "Digital Twin Matcher":
         digital_twin_matcher(filtered_patients, filtered_events)
-    elif selected_page == "Outcome Comparison":
-        outcome_comparator(filtered_patients, filtered_events)
-    elif selected_page == "Survival Analysis":
-        survival_analysis(filtered_patients, filtered_events)
 
 if __name__ == "__main__":
     main()
