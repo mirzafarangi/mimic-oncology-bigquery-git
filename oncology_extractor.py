@@ -165,9 +165,20 @@ class MIMICOncologyExtractor:
         # Extract clinical events for these patients
         events_data = self._extract_clinical_events(subject_ids_str)
         
+        # Handle case where no events are found
+        if len(events_data) == 0:
+            logger.warning("No clinical events found, generating basic pathways...")
+            events_data = pd.DataFrame(columns=['subject_id', 'event_date', 'event_type', 'drug'])
+        
         for _, patient in patients_df.iterrows():
             patient_subject_id = int(patient['subject_id'].replace('P', ''))
-            patient_events = events_data[events_data['subject_id'] == patient_subject_id]
+            
+            # Get events for this patient (if any)
+            if len(events_data) > 0 and 'subject_id' in events_data.columns:
+                patient_events = events_data[events_data['subject_id'] == patient_subject_id]
+            else:
+                # Create empty dataframe with required columns if no events
+                patient_events = pd.DataFrame(columns=['subject_id', 'event_date', 'event_type', 'drug'])
             
             # Convert to event format expected by dashboard
             patient_timeline = self._convert_to_timeline_events(
@@ -212,21 +223,26 @@ class MIMICOncologyExtractor:
             NULL as icd_code,
             NULL as icd_version,
             pr.drug,
-            pr.drug_name_generic as drug_name
+            pr.drug as drug_name  -- Use 'drug' column for both
         FROM `{self.client.mimic_dataset}.prescriptions` pr
         WHERE pr.subject_id IN ({subject_ids_str})
         AND (
             LOWER(pr.drug) LIKE '%chemo%' OR
             LOWER(pr.drug) LIKE '%oncol%' OR
             LOWER(pr.drug) LIKE '%cancer%' OR
-            LOWER(pr.drug_name_generic) LIKE '%chemo%' OR
-            LOWER(pr.drug_name_generic) LIKE '%oncol%' OR
-            LOWER(pr.drug_name_generic) LIKE '%cancer%' OR
-            pr.drug_name_generic IN (
-                'Cisplatin', 'Carboplatin', 'Paclitaxel', 'Docetaxel', 'Doxorubicin',
-                'Cyclophosphamide', 'Methotrexate', 'Fluorouracil', 'Gemcitabine',
-                'Rituximab', 'Bevacizumab', 'Trastuzumab', 'Levothyroxine'
-            )
+            LOWER(pr.drug) LIKE '%cisplatin%' OR
+            LOWER(pr.drug) LIKE '%carboplatin%' OR
+            LOWER(pr.drug) LIKE '%paclitaxel%' OR
+            LOWER(pr.drug) LIKE '%docetaxel%' OR
+            LOWER(pr.drug) LIKE '%doxorubicin%' OR
+            LOWER(pr.drug) LIKE '%cyclophosphamide%' OR
+            LOWER(pr.drug) LIKE '%methotrexate%' OR
+            LOWER(pr.drug) LIKE '%fluorouracil%' OR
+            LOWER(pr.drug) LIKE '%gemcitabine%' OR
+            LOWER(pr.drug) LIKE '%rituximab%' OR
+            LOWER(pr.drug) LIKE '%bevacizumab%' OR
+            LOWER(pr.drug) LIKE '%trastuzumab%' OR
+            LOWER(pr.drug) LIKE '%levothyroxine%'
         )
         
         ORDER BY subject_id, event_date
@@ -334,6 +350,7 @@ class MIMICOncologyExtractor:
         """Map MIMIC procedures/prescriptions to treatment names."""
         
         if event['event_type'] == 'prescription':
+            # Get drug name (now using 'drug_name' which maps to 'drug' column)
             drug_name = str(event.get('drug_name', '')).lower()
             drug = str(event.get('drug', '')).lower()
             

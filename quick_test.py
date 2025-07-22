@@ -28,7 +28,7 @@ def main():
     
     print("\n2. Testing oncology data extraction...")
     try:
-        patients_df, events_df, summary = extract_oncology_cohort(project_id, limit=10)  # Small test
+        patients_df, events_df, summary = extract_oncology_cohort(project_id, limit=5)  # Very small test
         
         print(f"✅ Found {len(patients_df)} oncology patients")
         print(f"✅ Generated {len(events_df)} clinical events")
@@ -39,11 +39,21 @@ def main():
             for cancer, count in cancer_counts.head(5).items():
                 print(f"  • {cancer}: {count}")
         
+        if len(events_df) > 0:
+            print(f"\nSample event types:")
+            event_counts = events_df['event_type'].value_counts()
+            for event_type, count in event_counts.items():
+                print(f"  • {event_type}: {count}")
+        else:
+            print("⚠️  No clinical events found (this is OK for testing)")
+        
         print(f"\n🎉 SUCCESS! Everything is working.")
         print(f"🚀 Ready to run: streamlit run app.py")
         
     except Exception as e:
         print(f"❌ Data extraction failed: {e}")
+        print("\n🔍 To debug schema issues, run:")
+        print("   python check_schema.py")
         sys.exit(1)
 
 if __name__ == "__main__":

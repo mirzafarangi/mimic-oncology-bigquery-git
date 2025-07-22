@@ -1102,9 +1102,9 @@ def main():
     # Data limit
     data_limit = st.sidebar.slider(
         "Max Patients to Load",
-        min_value=50,
+        min_value=5,
         max_value=1000,
-        value=200,  # Start smaller for testing
+        value=5,  # Start smaller for testing
         help="Number of oncology patients to extract from MIMIC-IV"
     )
     
