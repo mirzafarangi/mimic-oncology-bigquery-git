@@ -79,10 +79,10 @@ def test_bigquery_access(project_id):
                 
                 # List tables in the dataset
                 query = f"""
-                SELECT table_name, row_count
+                SELECT table_id, row_count
                 FROM `{dataset_name}.__TABLES__`
-                WHERE table_name IN ('patients', 'admissions', 'diagnoses_icd')
-                ORDER BY table_name
+                WHERE table_id IN ('patients', 'admissions', 'diagnoses_icd')
+                ORDER BY table_id
                 LIMIT 5
                 """
                 
@@ -92,7 +92,7 @@ def test_bigquery_access(project_id):
                     print(f"✅ {dataset_name} - Found {len(result)} tables:")
                     for _, row in result.iterrows():
                         row_count = row['row_count'] if 'row_count' in result.columns else 'Unknown'
-                        print(f"  • {row['table_name']}: {row_count:,} rows")
+                        print(f"  • {row['table_id']}: {row_count:,} rows")
                 else:
                     print(f"⚠️  {dataset_name} - No tables found or no access")
                     

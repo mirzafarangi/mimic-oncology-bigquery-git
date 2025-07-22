@@ -37,7 +37,7 @@ st.set_page_config(
 # REAL DATA LOADING FROM MIMIC-IV
 # =============================================
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes, no spinner conflicts
 def load_mimic_oncology_data(project_id: str = None, limit: int = 1000):
     """Load real oncology data from MIMIC-IV."""
     
@@ -1061,13 +1061,21 @@ def main():
     st.sidebar.subheader("🔐 Authentication Status")
     
     # Test connection button
-    if st.sidebar.button("🧪 Test Connection"):
-        with st.spinner("Testing BigQuery connection..."):
-            if test_connection(project_id):
-                st.sidebar.success("✅ Connected to MIMIC-IV")
-            else:
-                st.sidebar.error("❌ Connection failed")
-                st.sidebar.info("💡 Run setup_auth.py for help")
+    col1, col2 = st.sidebar.columns(2)
+    
+    with col1:
+        if st.button("🧪 Test Connection"):
+            with st.spinner("Testing BigQuery connection..."):
+                if test_connection(project_id):
+                    st.sidebar.success("✅ Connected to MIMIC-IV")
+                else:
+                    st.sidebar.error("❌ Connection failed")
+                    st.sidebar.info("💡 Run setup_auth.py for help")
+    
+    with col2:
+        if st.button("🔄 Clear Cache"):
+            st.cache_data.clear()
+            st.sidebar.success("Cache cleared!")
     
     # Show authentication help
     with st.sidebar.expander("🆘 Authentication Help"):

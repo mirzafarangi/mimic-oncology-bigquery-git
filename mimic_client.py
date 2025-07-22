@@ -45,11 +45,11 @@ class MIMICClient:
             logger.info(f"Testing connection to project: {self.project_id}")
             logger.info(f"Testing access to dataset: {self.mimic_dataset}")
             
-            # Test basic BigQuery access
+            # Test basic BigQuery access with correct column names
             query = f"""
-            SELECT table_name, row_count
+            SELECT table_id, row_count
             FROM `{self.mimic_dataset}.__TABLES__`
-            WHERE table_name = 'patients'
+            WHERE table_id = 'patients'
             LIMIT 1
             """
             
@@ -61,8 +61,18 @@ class MIMICClient:
                 logger.info(f"✅ Connection successful. MIMIC-IV patients table has {row_count} rows")
                 return True
             else:
-                logger.error("❌ No results from test query - check dataset access")
-                return False
+                # Try simpler test if metadata query fails
+                logger.info("Trying direct table access...")
+                simple_query = f"SELECT COUNT(*) as count FROM `{self.mimic_dataset}.patients` LIMIT 1"
+                result = self.client.query(simple_query).to_dataframe()
+                
+                if len(result) > 0:
+                    count = result['count'].iloc[0]
+                    logger.info(f"✅ Connection successful. Found {count:,} patients")
+                    return True
+                else:
+                    logger.error("❌ No results from test query - check dataset access")
+                    return False
                 
         except Exception as e:
             logger.error(f"❌ Connection test failed: {str(e)}")
