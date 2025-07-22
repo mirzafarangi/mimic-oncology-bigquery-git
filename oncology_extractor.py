@@ -42,13 +42,27 @@ class MIMICOncologyExtractor:
     def _get_oncology_patients(self, limit: int) -> pd.DataFrame:
         """Get oncology patients with demographics and cancer diagnoses."""
         
-        # Build ICD code list for cancer detection
-        cancer_codes = []
-        for cancer_data in CANCER_ICD_MAPPINGS.values():
-            cancer_codes.extend(cancer_data['icd10'])
-            cancer_codes.extend(cancer_data['icd9'])
+        # FIXED: Use broader cancer code patterns that match MIMIC-IV format
+        # Based on your schema check, ICD codes are stored without dots
+        cancer_patterns = [
+            # ICD-9 cancer codes (140-239 range) - most common in MIMIC-IV
+            '140', '141', '142', '143', '144', '145', '146', '147', '148', '149',  # Lip, oral cavity, pharynx
+            '150', '151', '152', '153', '154', '155', '156', '157', '158', '159',  # Digestive organs
+            '160', '161', '162', '163', '164', '165',  # Respiratory system
+            '170', '171', '172', '173', '174', '175', '176',  # Bone, connective tissue, skin, breast
+            '179', '180', '181', '182', '183', '184', '185', '186', '187', '188', '189',  # Genitourinary
+            '190', '191', '192', '193', '194', '195', '196', '197', '198', '199',  # Other and unspecified sites
+            '200', '201', '202', '203', '204', '205', '206', '207', '208',  # Lymphatic and hematopoietic
+            # Also include some ICD-10 codes
+            'C78', 'C80', 'C81', 'C82', 'C83', 'C84', 'C85', 'C90', 'C91', 'C92', 'C93', 'C94', 'C95'
+        ]
         
-        cancer_codes_str = "', '".join(cancer_codes[:50])  # Limit codes to avoid query size issues
+        # Create pattern matching query for broader cancer detection
+        pattern_conditions = []
+        for pattern in cancer_patterns:
+            pattern_conditions.append(f"d.icd_code LIKE '{pattern}%'")
+        
+        where_clause = " OR ".join(pattern_conditions)
         
         query = f"""
         WITH oncology_diagnoses AS (
@@ -59,7 +73,7 @@ class MIMICOncologyExtractor:
                 d.icd_version,
                 ROW_NUMBER() OVER (PARTITION BY d.subject_id ORDER BY d.seq_num) as diagnosis_rank
             FROM `{self.client.mimic_dataset}.diagnoses_icd` d
-            WHERE d.icd_code IN ('{cancer_codes_str}')
+            WHERE ({where_clause})
         ),
         
         patient_demographics AS (
@@ -422,6 +436,69 @@ class MIMICOncologyExtractor:
         
         category_complications = complications_by_category.get(cancer_category, ['General Complication'])
         return np.random.choice(category_complications)
+    
+    def _map_icd_to_cancer_type_flexible(self, icd_code: str) -> Optional[str]:
+        """Map ICD codes to cancer types using flexible pattern matching."""
+        if pd.isna(icd_code):
+            return None
+            
+        icd_str = str(icd_code).upper()
+        
+        # ICD-9 mappings (most common in MIMIC-IV)
+        if icd_str.startswith('140') or icd_str.startswith('141') or icd_str.startswith('142'):
+            return 'Head and Neck Cancer'
+        elif icd_str.startswith('150'):
+            return 'Esophageal Cancer'
+        elif icd_str.startswith('151'):
+            return 'Gastric Cancer'
+        elif icd_str.startswith('153') or icd_str.startswith('154'):
+            return 'Colorectal Cancer'
+        elif icd_str.startswith('155'):
+            return 'Hepatocellular Carcinoma'
+        elif icd_str.startswith('157'):
+            return 'Pancreatic Cancer'
+        elif icd_str.startswith('162'):
+            return 'Lung Cancer'
+        elif icd_str.startswith('172'):
+            return 'Melanoma'
+        elif icd_str.startswith('174') or icd_str.startswith('175'):
+            return 'Breast Cancer'
+        elif icd_str.startswith('179') or icd_str.startswith('180') or icd_str.startswith('182'):
+            return 'Gynecologic Cancer'
+        elif icd_str.startswith('183'):
+            return 'Ovarian Cancer'
+        elif icd_str.startswith('185'):
+            return 'Prostate Cancer'
+        elif icd_str.startswith('188'):
+            return 'Bladder Cancer'
+        elif icd_str.startswith('189'):
+            return 'Renal Cell Carcinoma'
+        elif icd_str.startswith('191'):
+            return 'Brain Cancer'
+        elif icd_str.startswith('193'):
+            return 'Thyroid Cancer'
+        elif icd_str.startswith('200') or icd_str.startswith('202'):
+            return 'Non-Hodgkin Lymphoma'
+        elif icd_str.startswith('201'):
+            return 'Hodgkin Lymphoma'
+        elif icd_str.startswith('203'):
+            return 'Multiple Myeloma'
+        elif icd_str.startswith('204') or icd_str.startswith('205') or icd_str.startswith('206') or icd_str.startswith('207') or icd_str.startswith('208'):
+            return 'Leukemia'
+        # ICD-10 mappings  
+        elif icd_str.startswith('C78') or icd_str.startswith('C80'):
+            return 'Metastatic Cancer'
+        elif icd_str.startswith('C81'):
+            return 'Hodgkin Lymphoma'
+        elif icd_str.startswith('C82') or icd_str.startswith('C83') or icd_str.startswith('C84') or icd_str.startswith('C85'):
+            return 'Non-Hodgkin Lymphoma'
+        elif icd_str.startswith('C90'):
+            return 'Multiple Myeloma'
+        elif icd_str.startswith('C91') or icd_str.startswith('C92') or icd_str.startswith('C93') or icd_str.startswith('C94') or icd_str.startswith('C95'):
+            return 'Leukemia'
+        else:
+            # Try original mapping as fallback
+            return map_icd_to_cancer_type(icd_code) or 'Unspecified Cancer'
     
     def _determine_outcome(self, patient: pd.Series) -> str:
         """Determine patient outcome based on cancer type and other factors."""

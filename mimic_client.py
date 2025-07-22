@@ -276,8 +276,54 @@ def map_icd_to_cancer_type(icd_code: str) -> Optional[str]:
     return None
 
 def get_cancer_category(cancer_type: str) -> str:
-    """Get cancer category from cancer type."""
-    for cancer_data in CANCER_ICD_MAPPINGS.values():
-        if cancer_data['name'] == cancer_type:
-            return cancer_data['category']
-    return 'Other'
+    """Get cancer category from cancer type - Enhanced mapping."""
+    if pd.isna(cancer_type) or cancer_type == 'Unknown':
+        return 'Other'
+        
+    cancer_lower = str(cancer_type).lower()
+    
+    # Hematologic malignancies
+    if any(keyword in cancer_lower for keyword in ['lymphoma', 'leukemia', 'myeloma']):
+        return 'Hematologic'
+    
+    # Thyroid
+    elif 'thyroid' in cancer_lower:
+        return 'Thyroid'
+    
+    # Gastrointestinal
+    elif any(keyword in cancer_lower for keyword in ['colorectal', 'gastric', 'pancreatic', 'hepatocellular', 'esophageal']):
+        return 'Gastrointestinal'
+    
+    # Thoracic
+    elif 'lung' in cancer_lower:
+        return 'Thoracic'
+    
+    # Genitourinary
+    elif any(keyword in cancer_lower for keyword in ['prostate', 'renal', 'bladder']):
+        return 'Genitourinary'
+    
+    # Gynecologic
+    elif any(keyword in cancer_lower for keyword in ['ovarian', 'gynecologic', 'cervical', 'endometrial']):
+        return 'Gynecologic'
+    
+    # Breast
+    elif 'breast' in cancer_lower:
+        return 'Breast'
+    
+    # Central Nervous System
+    elif 'brain' in cancer_lower:
+        return 'Central Nervous System'
+    
+    # Dermatologic
+    elif 'melanoma' in cancer_lower:
+        return 'Dermatologic'
+    
+    # Head and Neck
+    elif 'head and neck' in cancer_lower:
+        return 'Head and Neck'
+    
+    else:
+        return 'Other'
+
+# Need to import pandas for the isna check
+import pandas as pd
