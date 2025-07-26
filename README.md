@@ -2,7 +2,6 @@
 
 A clinical pathway analysis platform that analyzes real oncology patient data from the MIMIC-IV dataset using Google BigQuery.
 
-![Dashboard Preview](https://via.placeholder.com/800x400?text=Oncology+Pathway+Dashboard)
 
 ## 🎯 Key Features
 
